@@ -2,15 +2,15 @@ services:
   db:
     build: ./db
     environment:
-      POSTGRES_USER: orders
-      POSTGRES_PASSWORD: orders
-      POSTGRES_DB: orders
+      POSTGRES_USER: ordersUser
+      POSTGRES_PASSWORD: ordersPw
+      POSTGRES_DB: ordersDb
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U orders -d orders"]
+      test: ["CMD-SHELL", "pg_isready -U ordersUser -d ordersDb"]
       interval: 2s
       timeout: 3s
       retries: 30
@@ -19,7 +19,7 @@ services:
     build: ./order-service
     environment:
       PORT: "3000"
-      DATABASE_URL: postgres://orders:orders@db:5432/orders
+      DATABASE_URL: postgres://ordersUser:ordersPw@db:5432/ordersDb
       LOG_REQUESTS: "true"
     ports:
       - "3000:3000"
