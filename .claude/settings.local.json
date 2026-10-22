@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(docker --version)",
+      "PowerShell(node --version)",
+      "PowerShell(foreach \\($d in 'order-service','order-generator','frontend'\\) { Write-Output \"=== $d\"; Push-Location $d; npm install --no-audit --no-fund --loglevel=error; npm run build; Pop-Location })"
+    ]
+  }
+}
