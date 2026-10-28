@@ -1,10 +1,63 @@
 import { useState } from 'react';
-import { fetchRandomActiveOrderId, ORDER_FLOW, type OrderStatus } from './api';
-import { useOrderShortPolling } from './useOrderShortPolling';
+import { fetchRandomActiveOrderId, ORDER_FLOW, type Order, type OrderStatus } from './api';
+import { useOrderLongPolling } from './useOrderLongPolling';
+import { useOrderShortPolling, type StatusChange } from './useOrderShortPolling';
 
 const INTERVAL_OPTIONS = [500, 1000, 2000, 5000];
 
 const label = (status: OrderStatus) => status.replaceAll('_', ' ').toLowerCase();
+
+function OrderSummary({ orderId, order }: { orderId: string; order: Order | null }) {
+  const currentStep = order ? ORDER_FLOW.indexOf(order.status as (typeof ORDER_FLOW)[number]) : -1;
+
+  return (
+    <>
+      <div className="order-head">
+        <div>
+          <div className="muted small">Order</div>
+          <code>{orderId}</code>
+          {order && (
+            <div className="muted small">
+              {order.quantity} × {order.item} for {order.customerName}
+            </div>
+          )}
+        </div>
+        {order && <span className={`badge ${order.status.toLowerCase()}`}>{label(order.status)}</span>}
+      </div>
+
+      {order?.status === 'CANCELLED' ? (
+        <p className="error">This order was cancelled.</p>
+      ) : (
+        <ol className="steps">
+          {ORDER_FLOW.map((status, i) => (
+            <li key={status} className={i < currentStep ? 'past' : i === currentStep ? 'current' : ''}>
+              {label(status)}
+            </li>
+          ))}
+        </ol>
+      )}
+    </>
+  );
+}
+
+function ChangeTimeline({ changes, unit }: { changes: StatusChange[]; unit: string }) {
+  if (changes.length === 0) return null;
+  return (
+    <>
+      <h3>Observed changes</h3>
+      <ul className="timeline">
+        {changes.map((c) => (
+          <li key={`${c.status}-${c.pollNumber}`}>
+            <span>{label(c.status)}</span>
+            <span className="muted small">
+              {c.observedAt.toLocaleTimeString()} · {unit} #{c.pollNumber}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
 
 export default function App() {
   const [orderId, setOrderId] = useState<string | null>(null);
@@ -12,7 +65,8 @@ export default function App() {
   const [loadingId, setLoadingId] = useState(false);
   const [pickError, setPickError] = useState<string | null>(null);
 
-  const { order, polls, failedPolls, changes, lastPolledAt, error, done } = useOrderShortPolling(orderId, intervalMs);
+  const short = useOrderShortPolling(orderId, intervalMs);
+  const long = useOrderLongPolling(orderId);
 
   const trackRandomOrder = async () => {
     setLoadingId(true);
@@ -27,27 +81,26 @@ export default function App() {
   };
 
   // Every poll after the first that didn't reveal a new status was wasted work.
-  const wastedPolls = Math.max(0, polls - changes.length);
-  const currentStep = order ? ORDER_FLOW.indexOf(order.status as (typeof ORDER_FLOW)[number]) : -1;
+  const wastedPolls = Math.max(0, short.polls - short.changes.length);
 
   return (
     <main>
       <header>
         <h1>Order Tracker</h1>
-        <p className="muted">Transport: short polling</p>
+        <p className="muted">Short polling and long polling, tracking the same order side by side</p>
       </header>
 
       <section className="controls">
         <button onClick={trackRandomOrder} disabled={loadingId}>
           {loadingId ? 'Finding order…' : 'Track a random order'}
         </button>
-        {orderId && !done && (
+        {orderId && !(short.done && long.done) && (
           <button className="secondary" onClick={() => setOrderId(null)}>
             Stop
           </button>
         )}
         <label>
-          Poll every{' '}
+          Short poll every{' '}
           <select value={intervalMs} onChange={(e) => setIntervalMs(Number(e.target.value))}>
             {INTERVAL_OPTIONS.map((ms) => (
               <option key={ms} value={ms}>
@@ -62,39 +115,17 @@ export default function App() {
 
       {orderId && (
         <section className="card">
-          <div className="order-head">
-            <div>
-              <div className="muted small">Order</div>
-              <code>{orderId}</code>
-              {order && (
-                <div className="muted small">
-                  {order.quantity} × {order.item} for {order.customerName}
-                </div>
-              )}
-            </div>
-            {order && <span className={`badge ${order.status.toLowerCase()}`}>{label(order.status)}</span>}
-          </div>
-
-          {order?.status === 'CANCELLED' ? (
-            <p className="error">This order was cancelled.</p>
-          ) : (
-            <ol className="steps">
-              {ORDER_FLOW.map((status, i) => (
-                <li key={status} className={i < currentStep ? 'past' : i === currentStep ? 'current' : ''}>
-                  {label(status)}
-                </li>
-              ))}
-            </ol>
-          )}
+          <h2>Short polling</h2>
+          <OrderSummary orderId={orderId} order={short.order} />
 
           <dl className="stats">
             <div>
               <dt>Requests sent</dt>
-              <dd>{polls}</dd>
+              <dd>{short.polls}</dd>
             </div>
             <div>
               <dt>Status changes seen</dt>
-              <dd>{changes.length}</dd>
+              <dd>{short.changes.length}</dd>
             </div>
             <div>
               <dt>Polls with no change</dt>
@@ -102,31 +133,51 @@ export default function App() {
             </div>
             <div>
               <dt>Failed polls</dt>
-              <dd>{failedPolls}</dd>
+              <dd>{short.failedPolls}</dd>
             </div>
           </dl>
 
           <p className="muted small">
-            {done ? 'Order complete; polling stopped.' : `Polling every ${intervalMs}ms.`}
-            {lastPolledAt && ` Last poll at ${lastPolledAt.toLocaleTimeString()}.`}
+            {short.done ? 'Order complete; polling stopped.' : `Polling every ${intervalMs}ms.`}
+            {short.lastPolledAt && ` Last poll at ${short.lastPolledAt.toLocaleTimeString()}.`}
           </p>
-          {error && <p className="error">Last poll failed: {error}</p>}
+          {short.error && <p className="error">Last poll failed: {short.error}</p>}
 
-          {changes.length > 0 && (
-            <>
-              <h2>Observed changes</h2>
-              <ul className="timeline">
-                {changes.map((c) => (
-                  <li key={`${c.status}-${c.pollNumber}`}>
-                    <span>{label(c.status)}</span>
-                    <span className="muted small">
-                      {c.observedAt.toLocaleTimeString()} · poll #{c.pollNumber}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
+          <ChangeTimeline changes={short.changes} unit="poll" />
+        </section>
+      )}
+
+      {orderId && (
+        <section className="card">
+          <h2>Long polling</h2>
+          <OrderSummary orderId={orderId} order={long.order} />
+
+          <dl className="stats">
+            <div>
+              <dt>Requests sent</dt>
+              <dd>{long.requests}</dd>
+            </div>
+            <div>
+              <dt>Status changes seen</dt>
+              <dd>{long.changes.length}</dd>
+            </div>
+            <div>
+              <dt>Timed out, no change</dt>
+              <dd>{long.timeouts}</dd>
+            </div>
+            <div>
+              <dt>Failed requests</dt>
+              <dd>{long.failedRequests}</dd>
+            </div>
+          </dl>
+
+          <p className="muted small">
+            {long.done ? 'Order complete; long polling stopped.' : 'Waiting for the server to report a change.'}
+            {long.lastResponseAt && ` Last response at ${long.lastResponseAt.toLocaleTimeString()}.`}
+          </p>
+          {long.error && <p className="error">Last request failed: {long.error}</p>}
+
+          <ChangeTimeline changes={long.changes} unit="request" />
         </section>
       )}
     </main>

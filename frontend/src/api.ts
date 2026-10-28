@@ -16,14 +16,30 @@ export interface Order {
 
 const API_BASE = '/api';
 
-async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+async function request(path: string, signal?: AbortSignal): Promise<Response> {
   const res = await fetch(`${API_BASE}${path}`, { signal, cache: 'no-store' });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error ?? `Request failed with ${res.status}`);
-  return body as T;
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? `Request failed with ${res.status}`);
+  }
+  return res;
+}
+
+async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+  return (await request(path, signal)).json() as Promise<T>;
 }
 
 export const fetchRandomActiveOrderId = async () =>
   (await getJson<{ id: string }>('/orders/random-active')).id;
 
 export const fetchOrder = (id: string, signal?: AbortSignal) => getJson<Order>(`/orders/${id}`, signal);
+
+/**
+ * Resolves with the order once its status differs from `knownStatus`, or
+ * with null if the server's wait timed out with no change (204).
+ */
+export async function fetchOrderLongPoll(id: string, knownStatus: OrderStatus | undefined, signal?: AbortSignal) {
+  const query = knownStatus ? `?status=${knownStatus}` : '';
+  const res = await request(`/orders/${id}/long-poll${query}`, signal);
+  return res.status === 204 ? null : ((await res.json()) as Order);
+}
