@@ -1,5 +1,6 @@
 // Simulates order traffic by calling the order-service API: periodically
-// creates orders and nudges random in-flight orders to their next status.
+// nudges random in-flight orders to their next status, and creates new
+// orders when CREATE_ORDERS=true.
 
 type OrderStatus =
   | 'PLACED'
@@ -30,6 +31,7 @@ const numberEnv = (name: string, fallback: number) => {
 };
 
 const BASE_URL = process.env.ORDER_SERVICE_URL ?? 'http://order-service:3000';
+const CREATE_ORDERS = process.env.CREATE_ORDERS?.toLowerCase() === 'true';
 const CREATE_INTERVAL_MS = numberEnv('CREATE_INTERVAL_MS', 5000);
 const UPDATE_INTERVAL_MS = numberEnv('UPDATE_INTERVAL_MS', 1500);
 const CANCEL_PROBABILITY = numberEnv('CANCEL_PROBABILITY', 0.05);
@@ -95,9 +97,11 @@ function every(ms: number, task: () => Promise<void>) {
 }
 
 console.log(
-  `order-generator -> ${BASE_URL} (create every ${CREATE_INTERVAL_MS}ms, update every ${UPDATE_INTERVAL_MS}ms)`,
+  `order-generator -> ${BASE_URL} (create ${CREATE_ORDERS ? `every ${CREATE_INTERVAL_MS}ms` : 'disabled'}, update every ${UPDATE_INTERVAL_MS}ms)`,
 );
-every(CREATE_INTERVAL_MS, createOrder);
+if (CREATE_ORDERS) {
+  every(CREATE_INTERVAL_MS, createOrder);
+}
 every(UPDATE_INTERVAL_MS, advanceRandomOrder);
 
 process.on('SIGTERM', () => process.exit(0));

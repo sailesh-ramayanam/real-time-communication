@@ -8,7 +8,7 @@ A playground for comparing real-time delivery techniques (short polling, long po
 | ----------------- | ------------------------------------------------------------------- | ---- |
 | `db`              | Postgres 16 with the `orders` table, persisted to the `pgdata` volume | 5432 |
 | `order-service`   | Express + TypeScript REST API over the orders table                 | 3000 |
-| `order-generator` | Background job that creates orders and advances random ones via the API | n/a |
+| `order-generator` | Background job that advances random orders via the API, and creates new ones when `CREATE_ORDERS=true` (default `false`) | n/a |
 | `frontend`        | React + TypeScript app served by nginx, which proxies `/api` to the order service | 8080 |
 
 ## Run
