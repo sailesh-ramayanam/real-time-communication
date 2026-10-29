@@ -1,5 +1,6 @@
 // Simulates order traffic by calling the order-service API: periodically
-// creates orders and nudges random in-flight orders to their next status.
+// nudges random in-flight orders to their next status, and creates new
+// orders when CREATE_ORDERS=true.
 
 type OrderStatus =
   | 'PLACED'
@@ -30,6 +31,7 @@ const numberEnv = (name: string, fallback: number) => {
 };
 
 const BASE_URL = process.env.ORDER_SERVICE_URL ?? 'http://order-service:3000';
+const CREATE_ORDERS = process.env.CREATE_ORDERS?.toLowerCase() === 'true';
 const CREATE_INTERVAL_MS = numberEnv('CREATE_INTERVAL_MS', 5000);
 const UPDATE_INTERVAL_MS = numberEnv('UPDATE_INTERVAL_MS', 1500);
 const CANCEL_PROBABILITY = numberEnv('CANCEL_PROBABILITY', 0.05);
@@ -46,7 +48,8 @@ async function api<T>(method: string, path: string, body?: unknown): Promise<{ s
     body: body ? JSON.stringify(body) : undefined,
     signal: AbortSignal.timeout(5000),
   });
-  return { status: res.status, data: (await res.json()) as T };
+  // 204 has no body; callers check status before touching data.
+  return { status: res.status, data: res.status === 204 ? (undefined as T) : ((await res.json()) as T) };
 }
 
 async function createOrder() {
@@ -61,7 +64,7 @@ async function createOrder() {
 
 async function advanceRandomOrder() {
   const random = await api<{ id: string }>('GET', '/orders/random-active');
-  if (random.status === 404) return;
+  if (random.status === 204) return;
   if (random.status !== 200) throw new Error(`random-active failed with ${random.status}`);
 
   const { data: order } = await api<Order>('GET', `/orders/${random.data.id}`);
@@ -95,9 +98,11 @@ function every(ms: number, task: () => Promise<void>) {
 }
 
 console.log(
-  `order-generator -> ${BASE_URL} (create every ${CREATE_INTERVAL_MS}ms, update every ${UPDATE_INTERVAL_MS}ms)`,
+  `order-generator -> ${BASE_URL} (create ${CREATE_ORDERS ? `every ${CREATE_INTERVAL_MS}ms` : 'disabled'}, update every ${UPDATE_INTERVAL_MS}ms)`,
 );
-every(CREATE_INTERVAL_MS, createOrder);
+if (CREATE_ORDERS) {
+  every(CREATE_INTERVAL_MS, createOrder);
+}
 every(UPDATE_INTERVAL_MS, advanceRandomOrder);
 
 process.on('SIGTERM', () => process.exit(0));

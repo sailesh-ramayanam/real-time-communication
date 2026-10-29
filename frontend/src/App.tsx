@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { fetchRandomActiveOrderId, ORDER_FLOW, type Order, type OrderStatus } from './api';
+import { createOrder, ORDER_FLOW, type Order, type OrderStatus } from './api';
 import { useOrderLongPolling } from './useOrderLongPolling';
 import { useOrderShortPolling, type StatusChange } from './useOrderShortPolling';
 
@@ -62,21 +62,21 @@ function ChangeTimeline({ changes, unit }: { changes: StatusChange[]; unit: stri
 export default function App() {
   const [orderId, setOrderId] = useState<string | null>(null);
   const [intervalMs, setIntervalMs] = useState(2000);
-  const [loadingId, setLoadingId] = useState(false);
-  const [pickError, setPickError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   const short = useOrderShortPolling(orderId, intervalMs);
   const long = useOrderLongPolling(orderId);
 
-  const trackRandomOrder = async () => {
-    setLoadingId(true);
-    setPickError(null);
+  const createAndTrackOrder = async () => {
+    setCreating(true);
+    setCreateError(null);
     try {
-      setOrderId(await fetchRandomActiveOrderId());
+      setOrderId((await createOrder()).id);
     } catch (err) {
-      setPickError(err instanceof Error ? err.message : String(err));
+      setCreateError(err instanceof Error ? err.message : String(err));
     } finally {
-      setLoadingId(false);
+      setCreating(false);
     }
   };
 
@@ -91,8 +91,8 @@ export default function App() {
       </header>
 
       <section className="controls">
-        <button onClick={trackRandomOrder} disabled={loadingId}>
-          {loadingId ? 'Finding order…' : 'Track a random order'}
+        <button onClick={createAndTrackOrder} disabled={creating}>
+          {creating ? 'Creating order…' : 'Create order'}
         </button>
         {orderId && !(short.done && long.done) && (
           <button className="secondary" onClick={() => setOrderId(null)}>
@@ -111,7 +111,7 @@ export default function App() {
         </label>
       </section>
 
-      {pickError && <p className="error">{pickError}</p>}
+      {createError && <p className="error">{createError}</p>}
 
       {orderId && (
         <section className="card">
