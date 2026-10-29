@@ -17,7 +17,7 @@ A playground for comparing real-time delivery techniques (short polling, long po
 docker compose up --build
 ```
 
-Open http://localhost:8080 and click **Track a random order**.
+Open http://localhost:8080 and click **Create order**.
 
 Reset the database (the init script runs only when the volume is empty):
 

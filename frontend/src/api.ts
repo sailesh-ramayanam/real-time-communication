@@ -16,8 +16,8 @@ export interface Order {
 
 const API_BASE = '/api';
 
-async function request(path: string, signal?: AbortSignal): Promise<Response> {
-  const res = await fetch(`${API_BASE}${path}`, { signal, cache: 'no-store' });
+async function request(path: string, init?: RequestInit): Promise<Response> {
+  const res = await fetch(`${API_BASE}${path}`, { ...init, cache: 'no-store' });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? `Request failed with ${res.status}`);
@@ -26,11 +26,27 @@ async function request(path: string, signal?: AbortSignal): Promise<Response> {
 }
 
 async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
-  return (await request(path, signal)).json() as Promise<T>;
+  return (await request(path, { signal })).json() as Promise<T>;
 }
 
-export const fetchRandomActiveOrderId = async () =>
-  (await getJson<{ id: string }>('/orders/random-active')).id;
+const CUSTOMERS = ['Asha', 'Ben', 'Chen', 'Divya', 'Elena', 'Farhan', 'Grace', 'Hiro', 'Isha', 'Jonas'];
+const ITEMS = ['Laptop', 'Headphones', 'Coffee beans', 'Desk lamp', 'Running shoes', 'Backpack', 'Monitor', 'Keyboard'];
+
+const pick = <T>(items: readonly T[]): T => items[Math.floor(Math.random() * items.length)];
+
+/** Creates an order with randomized details and returns it. */
+export async function createOrder() {
+  const res = await request('/orders', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      customerName: pick(CUSTOMERS),
+      item: pick(ITEMS),
+      quantity: 1 + Math.floor(Math.random() * 3),
+    }),
+  });
+  return (await res.json()) as Order;
+}
 
 export const fetchOrder = (id: string, signal?: AbortSignal) => getJson<Order>(`/orders/${id}`, signal);
 
@@ -40,6 +56,6 @@ export const fetchOrder = (id: string, signal?: AbortSignal) => getJson<Order>(`
  */
 export async function fetchOrderLongPoll(id: string, knownStatus: OrderStatus | undefined, signal?: AbortSignal) {
   const query = knownStatus ? `?status=${knownStatus}` : '';
-  const res = await request(`/orders/${id}/long-poll${query}`, signal);
+  const res = await request(`/orders/${id}/long-poll${query}`, { signal });
   return res.status === 204 ? null : ((await res.json()) as Order);
 }
