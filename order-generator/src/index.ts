@@ -48,7 +48,8 @@ async function api<T>(method: string, path: string, body?: unknown): Promise<{ s
     body: body ? JSON.stringify(body) : undefined,
     signal: AbortSignal.timeout(5000),
   });
-  return { status: res.status, data: (await res.json()) as T };
+  // 204 has no body; callers check status before touching data.
+  return { status: res.status, data: res.status === 204 ? (undefined as T) : ((await res.json()) as T) };
 }
 
 async function createOrder() {
@@ -63,7 +64,7 @@ async function createOrder() {
 
 async function advanceRandomOrder() {
   const random = await api<{ id: string }>('GET', '/orders/random-active');
-  if (random.status === 404) return;
+  if (random.status === 204) return;
   if (random.status !== 200) throw new Error(`random-active failed with ${random.status}`);
 
   const { data: order } = await api<Order>('GET', `/orders/${random.data.id}`);

@@ -44,7 +44,7 @@ export function createApp(orders: OrderRepository, { logRequests }: { logRequest
   app.get('/orders/random-active', async (_req, res) => {
     const id = await orders.findRandomActiveId();
     if (!id) {
-      res.status(404).json({ error: 'No active orders' });
+      res.status(204).end();
       return;
     }
     res.json({ id });

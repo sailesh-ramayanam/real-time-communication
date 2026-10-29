@@ -33,7 +33,7 @@ docker compose down -v
 | PUT    | `/orders/:id`           | Body `{ status }`, returns `409` if the transition isn't allowed from the current status |
 | GET    | `/orders/:id`           | Returns the order including `status` and `updatedAt` |
 | GET    | `/orders/:id/long-poll?status=<last seen>` | Returns the order immediately if its status differs from `status` (or `status` is omitted); otherwise holds the request until the order changes (`200`) or 30s pass with no change (`204`) |
-| GET    | `/orders/random-active` | Returns `{ id }` of a random order that isn't `DELIVERED` or `CANCELLED`, or `404` if there are none |
+| GET    | `/orders/random-active` | Returns `{ id }` of a random order that isn't `DELIVERED` or `CANCELLED`, or `204` if there are none |
 
 Status flow: `PLACED → CONFIRMED → PREPARING → SHIPPED → OUT_FOR_DELIVERY → DELIVERED`. Orders can move to `CANCELLED` before they ship.
 
