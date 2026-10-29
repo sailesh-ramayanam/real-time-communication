@@ -11,7 +11,7 @@ export class OrderEvents {
   private readonly emitter = new EventEmitter();
 
   constructor() {
-    // One listener per waiting long-poll request; many clients may watch the same order.
+    // One listener per waiting long-poll request or open SSE stream; many clients may watch the same order.
     this.emitter.setMaxListeners(0);
   }
 

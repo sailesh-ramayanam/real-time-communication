@@ -1,12 +1,17 @@
 import express, { type Request, type Response } from 'express';
 import { OrderEvents } from './orderEvents.js';
-import type { OrderRepository } from './orderRepository.js';
+import type { Order, OrderRepository } from './orderRepository.js';
 import { isOrderStatus, ORDER_STATUSES, TERMINAL_STATUSES } from './orderStatus.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Kept well under nginx's default 60s proxy_read_timeout.
 const LONG_POLL_TIMEOUT_MS = 30_000;
+// An SSE stream can sit silent for longer than that, so send a comment line
+// often enough that nginx (and other proxies) don't drop an idle stream.
+const SSE_HEARTBEAT_MS = 15_000;
+
+const sseEvent = (order: Order) => `data: ${JSON.stringify(order)}\n\n`;
 
 const isNonEmptyString = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0;
 
@@ -118,6 +123,70 @@ export function createApp(orders: OrderRepository, { logRequests }: { logRequest
       finish();
       res.status(204).end();
     }, LONG_POLL_TIMEOUT_MS);
+  });
+
+  /**
+   * Server-Sent Events. One response stays open and carries the current order
+   * as the first event, then one event per status change. The stream ends
+   * once the order reaches a terminal status. Every event is a full snapshot,
+   * so a reconnecting EventSource needs no Last-Event-ID handling: it just
+   * gets the current order again.
+   */
+  app.get('/orders/:id/events', async (req, res) => {
+    const { id } = req.params;
+    if (!UUID_RE.test(id)) {
+      res.status(400).json({ error: 'Invalid order id' });
+      return;
+    }
+
+    let streaming = false;
+    let closed = false;
+    // Latest update seen while the initial read was in flight. It's always at
+    // least as new as what the read returns.
+    let pending: Order | undefined;
+    let heartbeat: NodeJS.Timeout | undefined;
+    const cleanup = () => {
+      closed = true;
+      clearInterval(heartbeat);
+      unsubscribe();
+    };
+
+    const send = (order: Order) => {
+      res.write(sseEvent(order));
+      if (TERMINAL_STATUSES.includes(order.status)) {
+        cleanup();
+        res.end();
+      }
+    };
+
+    // Subscribe before reading, as with long polling, so no update is missed.
+    const unsubscribe = orderEvents.subscribe(id, (order) => {
+      if (closed) return;
+      if (streaming) send(order);
+      else pending = order;
+    });
+    res.on('close', cleanup);
+
+    // Read before sending headers so a missing order can still get a real 404,
+    // which also tells EventSource not to reconnect.
+    const order = await orders.findById(id);
+    if (closed) return;
+    if (!order) {
+      cleanup();
+      res.status(404).json({ error: 'Order not found' });
+      return;
+    }
+
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      // nginx buffers proxied responses by default, which would hold events back.
+      'X-Accel-Buffering': 'no',
+    });
+    streaming = true;
+    heartbeat = setInterval(() => res.write(': heartbeat\n\n'), SSE_HEARTBEAT_MS);
+    send(pending ?? order);
   });
 
   app.put('/orders/:id', async (req, res) => {
