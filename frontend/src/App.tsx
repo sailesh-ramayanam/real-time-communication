@@ -114,71 +114,71 @@ export default function App() {
       {createError && <p className="error">{createError}</p>}
 
       {orderId && (
-        <section className="card">
-          <h2>Short polling</h2>
-          <OrderSummary orderId={orderId} order={short.order} />
+        <div className="cards">
+          <section className="card">
+            <h2>Short polling</h2>
+            <OrderSummary orderId={orderId} order={short.order} />
 
-          <dl className="stats">
-            <div>
-              <dt>Requests sent</dt>
-              <dd>{short.polls}</dd>
-            </div>
-            <div>
-              <dt>Status changes seen</dt>
-              <dd>{short.changes.length}</dd>
-            </div>
-            <div>
-              <dt>Polls with no change</dt>
-              <dd>{wastedPolls}</dd>
-            </div>
-            <div>
-              <dt>Failed polls</dt>
-              <dd>{short.failedPolls}</dd>
-            </div>
-          </dl>
+            <dl className="stats">
+              <div>
+                <dt>Requests sent</dt>
+                <dd>{short.polls}</dd>
+              </div>
+              <div>
+                <dt>Status changes seen</dt>
+                <dd>{short.changes.length}</dd>
+              </div>
+              <div>
+                <dt>Polls with no change</dt>
+                <dd>{wastedPolls}</dd>
+              </div>
+              <div>
+                <dt>Failed polls</dt>
+                <dd>{short.failedPolls}</dd>
+              </div>
+            </dl>
 
-          <p className="muted small">
-            {short.done ? 'Order complete; polling stopped.' : `Polling every ${intervalMs}ms.`}
-            {short.lastPolledAt && ` Last poll at ${short.lastPolledAt.toLocaleTimeString()}.`}
-          </p>
-          {short.error && <p className="error">Last poll failed: {short.error}</p>}
+            <p className="muted small">
+              {short.done ? 'Order complete; polling stopped.' : `Polling every ${intervalMs}ms.`}
+              {short.lastPolledAt && ` Last poll at ${short.lastPolledAt.toLocaleTimeString()}.`}
+            </p>
+            {short.error && <p className="error">Last poll failed: {short.error}</p>}
 
-          <ChangeTimeline changes={short.changes} unit="poll" />
-        </section>
-      )}
+            <ChangeTimeline changes={short.changes} unit="poll" />
+          </section>
 
-      {orderId && (
-        <section className="card">
-          <h2>Long polling</h2>
-          <OrderSummary orderId={orderId} order={long.order} />
+          <section className="card">
+            <h2>Long polling</h2>
+            <OrderSummary orderId={orderId} order={long.order} />
 
-          <dl className="stats">
-            <div>
-              <dt>Requests sent</dt>
-              <dd>{long.requests}</dd>
-            </div>
-            <div>
-              <dt>Status changes seen</dt>
-              <dd>{long.changes.length}</dd>
-            </div>
-            <div>
-              <dt>Timed out, no change</dt>
-              <dd>{long.timeouts}</dd>
-            </div>
-            <div>
-              <dt>Failed requests</dt>
-              <dd>{long.failedRequests}</dd>
-            </div>
-          </dl>
+            <dl className="stats">
+              <div>
+                <dt>Requests sent</dt>
+                <dd>{long.requests}</dd>
+              </div>
+              <div>
+                <dt>Status changes seen</dt>
+                <dd>{long.changes.length}</dd>
+              </div>
+              <div>
+                <dt>Timed out, no change</dt>
+                <dd>{long.timeouts}</dd>
+              </div>
+              <div>
+                <dt>Failed requests</dt>
+                <dd>{long.failedRequests}</dd>
+              </div>
+            </dl>
 
-          <p className="muted small">
-            {long.done ? 'Order complete; long polling stopped.' : 'Waiting for the server to report a change.'}
-            {long.lastResponseAt && ` Last response at ${long.lastResponseAt.toLocaleTimeString()}.`}
-          </p>
-          {long.error && <p className="error">Last request failed: {long.error}</p>}
+            <p className="muted small">
+              {long.done ? 'Order complete; long polling stopped.' : 'Waiting for the server to report a change.'}
+              {long.lastResponseAt && ` Last response at ${long.lastResponseAt.toLocaleTimeString()}.`}
+            </p>
+            {long.error && <p className="error">Last request failed: {long.error}</p>}
 
-          <ChangeTimeline changes={long.changes} unit="request" />
-        </section>
+            <ChangeTimeline changes={long.changes} unit="request" />
+          </section>
+        </div>
       )}
     </main>
   );
