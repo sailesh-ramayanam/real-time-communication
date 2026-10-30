@@ -59,3 +59,6 @@ export async function fetchOrderLongPoll(id: string, knownStatus: OrderStatus | 
   const res = await request(`/orders/${id}/long-poll${query}`, { signal });
   return res.status === 204 ? null : ((await res.json()) as Order);
 }
+
+/** SSE stream URL for EventSource, which does its own fetching. */
+export const orderEventsUrl = (id: string) => `${API_BASE}/orders/${id}/events`;

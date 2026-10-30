@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { createOrder, ORDER_FLOW, type Order, type OrderStatus } from './api';
 import { useOrderLongPolling } from './useOrderLongPolling';
 import { useOrderShortPolling, type StatusChange } from './useOrderShortPolling';
+import { useOrderSse } from './useOrderSse';
 
 const INTERVAL_OPTIONS = [500, 1000, 2000, 5000];
 
@@ -67,6 +68,7 @@ export default function App() {
 
   const short = useOrderShortPolling(orderId, intervalMs);
   const long = useOrderLongPolling(orderId);
+  const sse = useOrderSse(orderId);
 
   const createAndTrackOrder = async () => {
     setCreating(true);
@@ -87,14 +89,14 @@ export default function App() {
     <main>
       <header>
         <h1>Order Tracker</h1>
-        <p className="muted">Short polling and long polling, tracking the same order side by side</p>
+        <p className="muted">Short polling, long polling and SSE, tracking the same order side by side</p>
       </header>
 
       <section className="controls">
         <button onClick={createAndTrackOrder} disabled={creating}>
           {creating ? 'Creating order…' : 'Create order'}
         </button>
-        {orderId && !(short.done && long.done) && (
+        {orderId && !(short.done && long.done && sse.done) && (
           <button className="secondary" onClick={() => setOrderId(null)}>
             Stop
           </button>
@@ -177,6 +179,42 @@ export default function App() {
             {long.error && <p className="error">Last request failed: {long.error}</p>}
 
             <ChangeTimeline changes={long.changes} unit="request" />
+          </section>
+
+          <section className="card">
+            <h2>Server-Sent Events</h2>
+            <OrderSummary orderId={orderId} order={sse.order} />
+
+            <dl className="stats">
+              <div>
+                <dt>Connections opened</dt>
+                <dd>{sse.connections}</dd>
+              </div>
+              <div>
+                <dt>Status changes seen</dt>
+                <dd>{sse.changes.length}</dd>
+              </div>
+              <div>
+                <dt>Events received</dt>
+                <dd>{sse.events}</dd>
+              </div>
+              <div>
+                <dt>Connection errors</dt>
+                <dd>{sse.errors}</dd>
+              </div>
+            </dl>
+
+            <p className="muted small">
+              {sse.done
+                ? 'Order complete; stream closed.'
+                : sse.connected
+                  ? 'Stream open; the server pushes each change.'
+                  : 'Connecting…'}
+              {sse.lastEventAt && ` Last event at ${sse.lastEventAt.toLocaleTimeString()}.`}
+            </p>
+            {sse.error && <p className="error">{sse.error}</p>}
+
+            <ChangeTimeline changes={sse.changes} unit="event" />
           </section>
         </div>
       )}
